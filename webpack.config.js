@@ -3,7 +3,7 @@ module.exports = {
   output: {
     filename: "bundle.js",
     path: __dirname + '/public',
-    publicPath: "/"
+    publicPath: "/" + process.env.CONTEXT
   },
   devServer: {
     inline: true,

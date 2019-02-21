@@ -2,7 +2,7 @@
 #
 # https://docs.docker.com/reference/builder/
 
-FROM ruby:2.3.6-alpine
+FROM ruby:2.6.1-alpine
 MAINTAINER Mike Heijmans <parabuzzle@gmail.com>
 
 # Add env variables
@@ -12,7 +12,8 @@ ENV PORT=80 \
     REGISTRY_PROTOCOL=https \
     REGISTRY_SSL_VERIFY=true \
     REGISTRY_ALLOW_DELETE=false \
-    APP_HOME=/webapp
+    APP_HOME=/webapp \
+    CONTEXT=crane
 
 RUN mkdir -p $APP_HOME
 # switch to the application directory for exec commands
@@ -21,10 +22,11 @@ WORKDIR $APP_HOME
 # Add the app
 COPY . $APP_HOME
 
-RUN apk add --update nodejs g++ musl-dev make linux-headers && \
+RUN apk add --update nodejs npm g++ musl-dev make linux-headers && \
     npm install --no-optional && \
     node_modules/.bin/webpack && \
     rm -rf node_modules && \
+    gem update --system && \
     gem update bundler && \
     bundle install --deployment && \
     apk del nodejs g++ musl-dev make linux-headers

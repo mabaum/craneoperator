@@ -1,6 +1,6 @@
 source 'https://rubygems.org'
 
-ruby '2.3.6'
+ruby '2.6.1'
 
 # Server requirements
 gem 'thin' # or mongrel
@@ -31,3 +31,4 @@ gem 'memoist'
 gem "sinatra-cross_origin", "~> 0.3.1"
 
 gem 'sinatra-session'
+gem 'sinatra-contrib'

@@ -3,13 +3,14 @@ require 'pry'
 require 'erb'
 require 'time'
 require 'sinatra/base'
+require "sinatra/namespace"
 require 'sinatra/cross_origin'
 require './lib/config.rb'
 require './lib/helpers.rb'
 
 class CraneOp < Sinatra::Base
   register Sinatra::CrossOrigin
-  include Helpers
+  register Sinatra::Namespace
 
   configure do
     enable :cross_origin
@@ -40,7 +41,7 @@ class CraneOp < Sinatra::Base
     end
   end
 
-  ## Registry API Methods ##
+    ## Registry API Methods ##
 
   def fetch_catalog(next_string=nil)
     query={n: 100, last: next_string}
@@ -107,125 +108,34 @@ class CraneOp < Sinatra::Base
     return send_delete("/v2/#{repo}/manifests/#{digest}", conf, session, { 'Accept' => 'application/vnd.docker.distribution.manifest.v2+json'})
   end
 
-  ## Endpoints ##
+  namespace '/'+ENV['CONTEXT'] do
+    include Helpers
 
-  get '/api' do
-    return "API Version #{conf.version}"
-  end
+    ## Endpoints ##
 
-  get '/api/containers' do
-    content_type :json
-    repos = containers(params[:filter])
-    if !repos.is_a?(Array)
-      halt 401, {'content-type' => 'application/json'}, {'message' => "Registry requires authentication"}.to_json
-    end
-    repos.to_json
-  end
-
-  get '/api/tags/*' do |container|
-    content_type :json
-    tags = container_tags(container, params[:filter])
-    halt 404 if tags.nil?
-    tags.to_json
-  end
-
-  post '/api/login' do
-    content_type :json
-    params = Oj.load(request.body.read)
-    session.delete(:username)
-    session.delete(:password)
-    username = params['username']
-    password = params['password']
-    if check_login(conf, session, username, password)
-      session[:username] = username
-      session[:password] = password
-      return {status: "success"}.to_json
-    end
-    halt 401, {error: "credentials are wrong"}.to_json
-  end
-
-  get '/logout' do
-    session.destroy
-    redirect '/'
-  end
-
-  get /api\/containers\/(.*\/)(.*)/ do |container, tag|
-
-    # This is here because we need to handle slashes in container names
-    container.chop!
-
-    content_type :json
-
-    info = container_info(container, tag)
-
-    halt 404 if info['errors']
-    halt 404 if info['fsLayers'].nil?
-
-    info.to_json
-  end
-
-  get '/api/registryinfo' do
-    content_type :json
-    info = {
-      host: conf.registry_host,
-      public_url: conf.registry_public_url,
-      port: conf.registry_port,
-      protocol: conf.registry_protocol,
-      ssl_verify: conf.ssl_verify,
-      delete_allowed: conf.delete_allowed,
-      login_allowed: conf.login_allowed,
-      title: conf.title,
-    }
-    if session[:username]
-      info[:username] = session[:username]
-    end
-    info.to_json
-  end
-
-  delete /api\/containers\/(.*\/)(.*)/ do |container, tag|
-    halt 404 unless to_bool(conf.delete_allowed)
-
-    container.chop!
-    response = image_delete( container, tag )
-    headers = response.headers
-    response.body
-  end
-
-  # React app endpoints
-  [
-    "/containers/*",
-    "/containers",
-    "/login",
-    "/login/",
-    "/",
-  ].each do |path|
-    get path do
-      erb :index, locals: { title: conf.title}
-    end
-  end
-
-  # Error Handlers
-  error do
-    File.read(File.join('public', '500.html'))
-  end
-
-  not_found do
-    status 404
-    File.read(File.join('public', '404.html'))
-  end
-
-  # Debug endpoints
-  if Configuration.new.debug
-    get '/api/session' do
-      session.to_hash.to_json
+    get '/api' do
+      return "API Version #{conf.version}"
     end
 
-    get '/api/config' do
-      conf.to_hash.to_json
-    end
-
-    get '/api/login' do
+    get '/api/containers' do
       content_type :json
+      repos = containers(params[:filter])
+      if !repos.is_a?(Array)
+        halt 401, {'content-type' => 'application/json'}, {'message' => "Registry requires authentication"}.to_json
+      end
+      repos.to_json
+    end
+
+    get '/api/tags/*' do |container|
+      content_type :json
+      tags = container_tags(container, params[:filter])
+      halt 404 if tags.nil?
+      tags.to_json
+    end
+
+    post '/api/login' do
+      content_type :json
+      params = Oj.load(request.body.read)
       session.delete(:username)
       session.delete(:password)
       username = params['username']
@@ -238,6 +148,101 @@ class CraneOp < Sinatra::Base
       halt 401, {error: "credentials are wrong"}.to_json
     end
 
+    get '/logout' do
+      session.destroy
+      redirect '/'
+    end
+
+    get /api\/containers\/(.*\/)(.*)/ do |container, tag|
+
+      # This is here because we need to handle slashes in container names
+      container.chop!
+
+      content_type :json
+
+      info = container_info(container, tag)
+
+      halt 404 if info['errors']
+      halt 404 if info['fsLayers'].nil?
+
+      info.to_json
+    end
+
+    get '/api/registryinfo' do
+      content_type :json
+      info = {
+        host: conf.registry_host,
+        public_url: conf.registry_public_url,
+        port: conf.registry_port,
+        protocol: conf.registry_protocol,
+        ssl_verify: conf.ssl_verify,
+        delete_allowed: conf.delete_allowed,
+        login_allowed: conf.login_allowed,
+        title: conf.title,
+      }
+      if session[:username]
+        info[:username] = session[:username]
+      end
+      info.to_json
+    end
+
+    delete /api\/containers\/(.*\/)(.*)/ do |container, tag|
+      halt 404 unless to_bool(conf.delete_allowed)
+
+      container.chop!
+      response = image_delete( container, tag )
+      headers = response.headers
+      response.body
+    end
+
+    # React app endpoints
+    [
+      "/containers/*",
+      "/containers",
+      "/login",
+      "/login/",
+      "/",
+    ].each do |path|
+      get path do
+        erb :index, locals: { title: conf.title}
+      end
+    end
+
+    # Error Handlers
+    error do
+      File.read(File.join('public', '500.html'))
+    end
+
+    not_found do
+      status 404
+      File.read(File.join('public', '404.html'))
+    end
+
+    # Debug endpoints
+    if Configuration.new.debug
+      get '/api/session' do
+        session.to_hash.to_json
+      end
+
+      get '/api/config' do
+        conf.to_hash.to_json
+      end
+
+      get '/api/login' do
+        content_type :json
+        session.delete(:username)
+        session.delete(:password)
+        username = params['username']
+        password = params['password']
+        if check_login(conf, session, username, password)
+          session[:username] = username
+          session[:password] = password
+          return {status: "success"}.to_json
+        end
+        halt 401, {error: "credentials are wrong"}.to_json
+      end
+
+    end
   end
 
 end
